@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Testo\Assert\Internal\Expectation;
 
 use Testo\Assert\Api\ExpectedException;
+use Testo\Assert\Internal\Pattern;
 use Testo\Assert\State\Expectation;
 use Testo\Assert\State\Expectation\ExpectationComposite;
 use Testo\Assert\TestState;
@@ -119,10 +120,16 @@ final class ExpectExceptionHandler implements ExpectedException
     }
 
     #[\Override]
-    public function withMessagePattern(string $pattern): static
+    public function withMessageMatchingRegex(string $pattern): static
     {
         $this->expectedMessagePattern = $pattern;
         return $this;
+    }
+
+    #[\Override]
+    public function withMessagePattern(string $pattern): static
+    {
+        return $this->withMessageMatchingRegex($pattern);
     }
 
     #[\Override]
@@ -155,7 +162,14 @@ final class ExpectExceptionHandler implements ExpectedException
 
     public function __invoke(TestResult $result, TestState $state): TestResult
     {
-        $record = $this->evaluate($result->failure);
+        # The check runs after the test body, outside the runner's catch: an invalid pattern
+        # would abort the whole pipeline instead of erroring the test.
+        try {
+            $record = $this->evaluate($result->failure);
+        } catch (\InvalidArgumentException $e) {
+            return $result->with(status: Status::Error)->withFailure($e);
+        }
+
         $state->history[] = $record;
 
         return $record->isSuccess()
@@ -243,7 +257,7 @@ final class ExpectExceptionHandler implements ExpectedException
 
         # Message pattern check
         if ($this->expectedMessagePattern !== null) {
-            \preg_match($this->expectedMessagePattern, $actual->getMessage()) === 1
+            Pattern::matches($this->expectedMessagePattern, $actual->getMessage())
                 ? $composite->success('message matches pattern ' . $this->expectedMessagePattern)
                 : $composite->fail(
                     expectation: 'message matches pattern ' . $this->expectedMessagePattern,

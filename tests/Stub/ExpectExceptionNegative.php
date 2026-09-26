@@ -52,9 +52,21 @@ final class ExpectExceptionNegative
     public function wrongMessagePattern(): never
     {
         Expect::exception(\RuntimeException::class)
-            ->withMessagePattern('/^exact match$/');
+            ->withMessageMatchingRegex('/^exact match$/');
 
         throw new \RuntimeException('not an exact match at all');
+    }
+
+    /**
+     * Message pattern is not a valid PCRE pattern.
+     */
+    #[Test]
+    public function invalidMessagePattern(): never
+    {
+        Expect::exception(\RuntimeException::class)
+            ->withMessageMatchingRegex('/(/');
+
+        throw new \RuntimeException('any message');
     }
 
     /**
